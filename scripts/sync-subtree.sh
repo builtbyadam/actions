@@ -25,6 +25,10 @@ SRC_SHA="$(git rev-parse --short HEAD)"
 WORK="$(mktemp -d)"
 git clone --quiet "https://x-access-token:${TOKEN}@github.com/${MIRROR}.git" "$WORK"
 
+# CI runners have no git identity; commits in the mirror clone need one.
+git -C "$WORK" config user.name "github-actions[bot]"
+git -C "$WORK" config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
 # Wipe tracked content (keep .git) and copy the action to the mirror ROOT
 ( cd "$WORK" && git rm -rq . 2>/dev/null || true )
 cp -r "actions/${ACTION}/." "$WORK/"
