@@ -95,6 +95,7 @@ Handles dual-license expressions like `(MIT OR Apache-2.0)` and normalizes SPDX 
 ## Limitations
 
 - **The npm scanner reads installed metadata**, so run your `npm ci` / `npm install` step *before* this action.
+- **Private packages are excluded from the npm scan** (`--excludePrivatePackages`): license-checker reports any `"private": true` package — including your own root package — as `UNLICENSED` regardless of its declared license, which would make allowlist mode flag every private repo. You're auditing your dependencies' licenses, not your own.
 - License data is only as accurate as each package's published metadata; `license-checker` reports `UNKNOWN` when it can't determine a license.
 - SPDX expression parsing is intentionally simple: deeply nested mixed expressions are flattened rather than fully parsed.
 - Only npm and Python ecosystems are supported; license aliases / deprecated ids are not normalized to a canonical form.

@@ -41,7 +41,10 @@ jobs:
             "name": "fixture",
             "version": "1.0.0",
             "license": "MIT",
-            "private": true
+            "private": true,
+            "dependencies": {
+              "ms": "2.1.3"
+            }
           }
           JSON
           (cd "$RUNNER_TEMP/fixture" && npm install --no-audit --no-fund)
