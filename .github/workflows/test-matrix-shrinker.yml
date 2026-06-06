@@ -1,6 +1,7 @@
 name: test-matrix-shrinker
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "actions/matrix-shrinker/**"

@@ -1,6 +1,7 @@
 name: test-license-auditor
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "actions/license-auditor/**"
