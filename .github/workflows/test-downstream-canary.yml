@@ -1,0 +1,73 @@
+name: test-downstream-canary
+
+on:
+  pull_request:
+    paths:
+      - "actions/downstream-canary/**"
+      - ".github/workflows/test-downstream-canary.yml"
+  push:
+    branches: [main]
+    paths:
+      - "actions/downstream-canary/**"
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "20"
+      - working-directory: actions/downstream-canary
+        run: node --test
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      # Scenario 1: PASS. Build a public downstream repo with a trivial command.
+      # Distinct work-path keeps this checkout separate from scenario 2.
+      - id: pass
+        uses: ./actions/downstream-canary
+        with:
+          downstream-repo: actions/checkout
+          downstream-ref: main
+          build-command: node -e "console.log('downstream ok')"
+          work-path: downstream-pass
+      - name: Assert PASS scenario
+        env:
+          PASSED: ${{ steps.pass.outputs.passed }}
+          EXCERPT: ${{ steps.pass.outputs.log-excerpt }}
+        run: |
+          node -e '
+            const assert = require("node:assert");
+            assert.strictEqual(process.env.PASSED, "true", "expected passed=true, got " + process.env.PASSED);
+            assert.ok(process.env.EXCERPT.includes("downstream ok"), "excerpt missing build output: " + process.env.EXCERPT);
+            console.log("OK: PASS scenario -> passed=true, excerpt contains downstream ok");
+          '
+
+      # Scenario 2: FAIL-soft. Same repo, a failing build, fail-on-breakage=false
+      # so the action exits 0. Distinct work-path avoids colliding with scenario 1.
+      - id: failsoft
+        uses: ./actions/downstream-canary
+        with:
+          downstream-repo: actions/checkout
+          downstream-ref: main
+          build-command: bash -c "echo boom && exit 1"
+          fail-on-breakage: "false"
+          work-path: downstream-fail
+      - name: Assert FAIL-soft scenario
+        env:
+          PASSED: ${{ steps.failsoft.outputs.passed }}
+          EXCERPT: ${{ steps.failsoft.outputs.log-excerpt }}
+        run: |
+          node -e '
+            const assert = require("node:assert");
+            assert.strictEqual(process.env.PASSED, "false", "expected passed=false, got " + process.env.PASSED);
+            assert.ok(process.env.EXCERPT.includes("boom"), "excerpt missing failure output: " + process.env.EXCERPT);
+            console.log("OK: FAIL-soft scenario -> passed=false, action exited 0, excerpt contains boom");
+          '

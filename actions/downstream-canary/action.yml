@@ -1,0 +1,164 @@
+name: "downstream-canary"
+description: "Clone a downstream consumer repo, build it against your latest checkout, and catch breaking changes before you release. Reverse-dependency / breaking-change detection in CI."
+author: "amoussa1229"
+branding:
+  icon: "git-branch"
+  color: "blue"
+
+inputs:
+  downstream-repo:
+    description: >-
+      The downstream consumer repository to test, in "owner/repo" form (e.g.
+      "octocat/widget"). It is cloned read-only and built against your current
+      checkout.
+    required: true
+  downstream-ref:
+    description: "Git ref (branch, tag, or SHA) of the downstream repo to check out."
+    required: false
+    default: "main"
+  build-command:
+    description: >-
+      Command run in the downstream checkout to build/test it (e.g. "npm ci &&
+      npm test"). Must be non-empty. A non-zero exit is treated as a breakage.
+    required: true
+  link-step:
+    description: >-
+      Optional command run in the downstream checkout BEFORE build-command, used
+      to point the downstream at your code (e.g. "npm link ../.."). Your own
+      checkout lives at the workspace root, so a relative path like "../.." from
+      inside the downstream work dir reaches it. Empty = skipped.
+    required: false
+    default: ""
+  fail-on-breakage:
+    description: >-
+      When "true" (default) the action exits non-zero if the downstream build
+      fails (after writing outputs). When "false" it reports the breakage but
+      exits 0, so you can gate on the "passed" output yourself.
+    required: false
+    default: "true"
+  work-path:
+    description: >-
+      Workspace-relative path the downstream repo is checked out into. Override
+      it when running the action more than once in a single job so the checkouts
+      do not collide.
+    required: false
+    default: "downstream-canary-work"
+  github-token:
+    description: >-
+      Token passed to checkout for the downstream repo. The default works for
+      public repos; supply a PAT with read access for private downstream repos.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  passed:
+    description: '"true" if the downstream build exited 0, otherwise "false".'
+    value: ${{ steps.report.outputs.passed }}
+  log-excerpt:
+    description: "The last (up to) 50 lines of the combined link-step + build-command output."
+    value: ${{ steps.report.outputs.log-excerpt }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Validate inputs
+      shell: bash
+      env:
+        INPUT_DOWNSTREAM_REPO: ${{ inputs.downstream-repo }}
+        INPUT_DOWNSTREAM_REF: ${{ inputs.downstream-ref }}
+        INPUT_BUILD_COMMAND: ${{ inputs.build-command }}
+        INPUT_FAIL_ON_BREAKAGE: ${{ inputs.fail-on-breakage }}
+        INPUT_WORK_PATH: ${{ inputs.work-path }}
+      run: |
+        set -euo pipefail
+
+        # owner/repo: each segment is a non-empty run of GitHub-legal name
+        # characters, exactly one slash, no leading/trailing slash.
+        if ! printf '%s' "$INPUT_DOWNSTREAM_REPO" | grep -Eq '^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$'; then
+          echo 'Input "downstream-repo" must be in "owner/repo" form (e.g. "octocat/widget").' >&2
+          exit 1
+        fi
+        if [ -z "${INPUT_DOWNSTREAM_REF// /}" ]; then
+          echo 'Input "downstream-ref" must be a non-empty git ref.' >&2
+          exit 1
+        fi
+        if [ -z "${INPUT_BUILD_COMMAND//[[:space:]]/}" ]; then
+          echo 'Input "build-command" must be a non-empty command.' >&2
+          exit 1
+        fi
+        case "$INPUT_FAIL_ON_BREAKAGE" in
+          true|false) ;;
+          *) echo 'Input "fail-on-breakage" must be "true" or "false".' >&2; exit 1 ;;
+        esac
+        if [ -z "${INPUT_WORK_PATH// /}" ]; then
+          echo 'Input "work-path" must be a non-empty workspace-relative path.' >&2
+          exit 1
+        fi
+        case "$INPUT_WORK_PATH" in
+          /*|*..*) echo 'Input "work-path" must be a workspace-relative path without "..".' >&2; exit 1 ;;
+        esac
+
+    - name: Checkout downstream repo
+      uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      with:
+        repository: ${{ inputs.downstream-repo }}
+        ref: ${{ inputs.downstream-ref }}
+        path: ${{ inputs.work-path }}
+        token: ${{ inputs.github-token }}
+
+    - name: Run link-step and build-command
+      id: build
+      shell: bash
+      env:
+        INPUT_LINK_STEP: ${{ inputs.link-step }}
+        INPUT_BUILD_COMMAND: ${{ inputs.build-command }}
+        INPUT_WORK_PATH: ${{ inputs.work-path }}
+      run: |
+        set -uo pipefail
+        log="$RUNNER_TEMP/downstream-canary-$$.log"
+        echo "log-path=$log" >> "$GITHUB_OUTPUT"
+
+        # Run link-step (if any) then build-command inside the downstream dir,
+        # capturing combined stdout+stderr to the log. The link-step and the
+        # build are chained with `&&` so a failing link-step short-circuits and
+        # the build is not run. We deliberately avoid `set -e` here: when a
+        # command runs on the left of `||` (as below to capture the code), bash
+        # disables `set -e` for it, so `&&` chaining — not `set -e` — is what
+        # actually short-circuits. The OUTER step must not abort, so we capture
+        # the exit code and hand it to the reporter, which decides pass/fail.
+        run_sequence() {
+          cd "$INPUT_WORK_PATH" || return $?
+          if [ -n "${INPUT_LINK_STEP//[[:space:]]/}" ]; then
+            echo "+ link-step: $INPUT_LINK_STEP"
+            bash -c "$INPUT_LINK_STEP" || return $?
+          fi
+          echo "+ build-command: $INPUT_BUILD_COMMAND"
+          bash -c "$INPUT_BUILD_COMMAND"
+        }
+
+        code=0
+        run_sequence > "$log" 2>&1 || code=$?
+
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+
+    - name: Report result
+      id: report
+      shell: bash
+      env:
+        DOWNSTREAM_CANARY_LOG: ${{ steps.build.outputs.log-path }}
+        DOWNSTREAM_CANARY_EXIT_CODE: ${{ steps.build.outputs.exit-code }}
+      run: |
+        set -euo pipefail
+        node "$GITHUB_ACTION_PATH/src/excerpt.js"
+
+    - name: Fail on breakage
+      shell: bash
+      env:
+        PASSED: ${{ steps.report.outputs.passed }}
+        INPUT_FAIL_ON_BREAKAGE: ${{ inputs.fail-on-breakage }}
+      run: |
+        set -euo pipefail
+        if [ "$PASSED" != "true" ] && [ "$INPUT_FAIL_ON_BREAKAGE" = "true" ]; then
+          echo "downstream-canary: downstream build failed and fail-on-breakage is true." >&2
+          exit 1
+        fi
