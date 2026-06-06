@@ -27,6 +27,7 @@ A few flagship actions are also mirrored to standalone repositories and publishe
 | [matrix-shrinker](actions/matrix-shrinker) | Emits a job matrix containing only the entries relevant to the changed paths. | JS |
 | [artifact-sweeper](actions/artifact-sweeper) | Deletes old workflow artifacts and caches to reclaim storage; dry-run by default. | JS |
 | [license-auditor](actions/license-auditor) | Fails the build when a dependency's license violates an allow/deny SPDX policy. | Composite |
+| [pr-size-tagger](actions/pr-size-tagger) | Labels a pull request by size bin (size/XS–XL) with an optional too-large warning. | JS |
 
 ## Repository layout
 

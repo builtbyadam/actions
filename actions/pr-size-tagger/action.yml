@@ -1,0 +1,45 @@
+name: "pr-size-tagger"
+description: "Label a pull request by size (lines changed) and optionally warn when it exceeds a threshold."
+author: "amoussa1229"
+branding:
+  icon: "tag"
+  color: "green"
+
+inputs:
+  bins:
+    description: >-
+      JSON object mapping a size label to its inclusive maximum number of
+      changed lines, e.g. {"size/XS": 10, "size/S": 100}. A PR is assigned the
+      smallest bin whose max is >= its line count. The bin with the largest max
+      acts as the catch-all for anything bigger than every other bin.
+    required: false
+    default: '{"size/XS":10,"size/S":100,"size/M":500,"size/L":1000,"size/XL":999999999}'
+  count:
+    description: >-
+      How to count changed lines: "changed" (additions + deletions) or
+      "additions" (additions only).
+    required: false
+    default: "changed"
+  warn-threshold:
+    description: >-
+      Optional positive integer. When the computed line count exceeds this
+      value, the action emits a warning and sets over-threshold to "true".
+      Leave empty to disable threshold warnings.
+    required: false
+    default: ""
+  github-token:
+    description: "Token used to read PR labels and apply/remove the size label."
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  label:
+    description: 'The size label applied to the pull request, or "" when the action was a no-op.'
+  lines:
+    description: "The computed number of changed lines (per the count mode)."
+  over-threshold:
+    description: '"true" when the line count exceeded warn-threshold, otherwise "false".'
+
+runs:
+  using: "node20"
+  main: "dist/index.js"
