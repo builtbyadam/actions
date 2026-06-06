@@ -43,17 +43,17 @@ jobs:
       - uses: builtbyadam/actions/secret-canary@<commit-sha>
         with:
           scanner: gitleaks
-          # scanner-version defaults to the pinned latest gitleaks release
+          # scanner-version defaults to the pinned release for the selected scanner
           allowlist-path: .gitleaks.toml   # optional
 ```
 
-To use trufflehog instead, also override `scanner-version` with a trufflehog tag:
+To use trufflehog instead:
 
 ```yaml
       - uses: builtbyadam/actions/secret-canary@<commit-sha>
         with:
           scanner: trufflehog
-          scanner-version: v3.95.5
+          # scanner-version defaults to the pinned trufflehog release (v3.95.5)
           allowlist-path: .trufflehog-exclude.txt   # optional, exclude-paths format
 ```
 
@@ -62,7 +62,7 @@ To use trufflehog instead, also override `scanner-version` with a trufflehog tag
 | Input | Required | Default | Description |
 |---|---|---|---|
 | `scanner` | | `gitleaks` | `gitleaks` or `trufflehog`. |
-| `scanner-version` | | `v8.30.1` | Release tag of the **selected** scanner to download. Default is the pinned gitleaks release; if you set `scanner: trufflehog`, set this to a trufflehog tag (pinned latest is `v3.95.5`). |
+| `scanner-version` | | `""` | Release tag of the **selected** scanner to download. When empty, the per-scanner pinned default is used: gitleaks `v8.30.1`, trufflehog `v3.95.5`. |
 | `allowlist-path` | | `""` | Optional allowlist file. For **gitleaks** passed as `--config` (TOML config with an `[allowlist]` section); for **trufflehog** passed as `--exclude-paths` (newline-separated path globs). The two formats differ. |
 | `comment-on-pr` | | `true` | Upsert a single summary comment on the PR (when the event is a PR with a token). |
 | `fail-on-findings` | | `true` | Fail the job when findings remain after the allowlist. Set `false` to report without blocking. |
@@ -75,7 +75,7 @@ The download is hard-pinned to a specific release tag:
 - **gitleaks:** `v8.30.1`
 - **trufflehog:** `v3.95.5`
 
-`scanner-version` defaults to the gitleaks pin. When you select trufflehog, override `scanner-version` with the trufflehog pin (or a later tag).
+When `scanner-version` is left empty, the pin for the **selected** scanner is used automatically — selecting trufflehog without a version no longer needs a manual override. Set `scanner-version` explicitly to use a different release.
 
 ## Outputs
 

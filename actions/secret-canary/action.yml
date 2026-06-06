@@ -17,11 +17,11 @@ inputs:
   scanner-version:
     description: >-
       Release tag of the selected scanner to download (e.g. "v8.30.1" for
-      gitleaks, "v3.95.5" for trufflehog). The default is the pinned latest
-      release for gitleaks; if you select trufflehog you should set this to a
-      trufflehog tag (default for trufflehog is "v3.95.5").
+      gitleaks, "v3.95.5" for trufflehog). When empty (the default), the
+      pinned default for the selected scanner is used: gitleaks v8.30.1,
+      trufflehog v3.95.5.
     required: false
-    default: "v8.30.1"
+    default: ""
   allowlist-path:
     description: >-
       Optional path to an allowlist file. For gitleaks this is passed as
@@ -76,9 +76,13 @@ runs:
           echo 'Input "scanner" must be one of: gitleaks, trufflehog' >&2
           exit 1
         fi
+        # Per-scanner pinned defaults when scanner-version is left empty.
         if [ -z "$SCANNER_VERSION" ]; then
-          echo 'Input "scanner-version" must be a non-empty release tag (e.g. v8.30.1)' >&2
-          exit 1
+          if [ "$SCANNER" = "gitleaks" ]; then
+            SCANNER_VERSION="v8.30.1"
+          else
+            SCANNER_VERSION="v3.95.5"
+          fi
         fi
         if [ "$COMMENT_ON_PR" != "true" ] && [ "$COMMENT_ON_PR" != "false" ]; then
           echo 'Input "comment-on-pr" must be "true" or "false"' >&2
