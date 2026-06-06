@@ -1,0 +1,87 @@
+name: test-license-auditor
+
+on:
+  pull_request:
+    paths:
+      - "actions/license-auditor/**"
+      - ".github/workflows/test-license-auditor.yml"
+  push:
+    branches: [main]
+    paths:
+      - "actions/license-auditor/**"
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "20"
+      - working-directory: actions/license-auditor
+        run: node --test
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "20"
+
+      # Build a throwaway npm fixture OUTSIDE the repo tree so the action's
+      # auto-detection and scanner have a clean, deterministic target.
+      - name: Create npm fixture
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/fixture"
+          cat > "$RUNNER_TEMP/fixture/package.json" <<'JSON'
+          {
+            "name": "fixture",
+            "version": "1.0.0",
+            "license": "MIT",
+            "private": true
+          }
+          JSON
+          (cd "$RUNNER_TEMP/fixture" && npm install --no-audit --no-fund)
+
+      # Scenario 1: allowlist "MIT" -> the fixture is compliant -> 0 violations.
+      - id: allow
+        uses: ./actions/license-auditor
+        with:
+          working-directory: ${{ runner.temp }}/fixture
+          ecosystem: npm
+          allow: "MIT"
+      - name: Assert no violations
+        env:
+          COUNT: ${{ steps.allow.outputs.violation-count }}
+          VIOLATIONS: ${{ steps.allow.outputs.violations }}
+        run: |
+          node -e '
+            const assert = require("node:assert");
+            assert.strictEqual(process.env.COUNT, "0", "expected 0 violations, got " + process.env.COUNT);
+            assert.deepStrictEqual(JSON.parse(process.env.VIOLATIONS), []);
+            console.log("OK: allowlist MIT -> no violations");
+          '
+
+      # Scenario 2: deny "MIT", report-only -> at least one violation, parsable.
+      - id: deny
+        uses: ./actions/license-auditor
+        with:
+          working-directory: ${{ runner.temp }}/fixture
+          ecosystem: npm
+          deny: "MIT"
+          fail-on-violation: "false"
+      - name: Assert violations reported
+        env:
+          COUNT: ${{ steps.deny.outputs.violation-count }}
+          VIOLATIONS: ${{ steps.deny.outputs.violations }}
+        run: |
+          node -e '
+            const assert = require("node:assert");
+            assert.ok(Number(process.env.COUNT) >= 1, "expected >=1 violation, got " + process.env.COUNT);
+            const v = JSON.parse(process.env.VIOLATIONS);
+            assert.ok(Array.isArray(v) && v.length >= 1);
+            assert.ok(typeof v[0].package === "string" && v[0].package.length > 0);
+            console.log("OK: denylist MIT -> " + process.env.COUNT + " violation(s)");
+          '
