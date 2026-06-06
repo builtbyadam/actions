@@ -1,8 +1,5 @@
 name: "secret-canary"
-description: >-
-  Scan the checked-out tree for leaked secrets (gitleaks or trufflehog) with a
-  curated allowlist, and post the findings as a single upserted pull-request
-  comment instead of failing silently.
+description: "Scan for leaked secrets (gitleaks or trufflehog) with an allowlist; findings land in a redacted, upserted PR comment."
 author: "amoussa1229"
 branding:
   icon: "alert-triangle"
