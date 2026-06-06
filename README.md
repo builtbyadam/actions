@@ -13,7 +13,7 @@ No abandoned slop. Every action is self-contained, documented, and backed by a t
 [![Dependabot](https://img.shields.io/badge/Dependabot-enabled-025E8C?logo=dependabot)](.github/dependabot.yml)
 [![SHA-pinned](https://img.shields.io/badge/deps-SHA--pinned-2ea44f)](#-principles)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
-[![Node](https://img.shields.io/badge/node-20-339933?logo=node.js&logoColor=white)](.nvmrc)
+[![Node](https://img.shields.io/badge/node-24-339933?logo=node.js&logoColor=white)](.nvmrc)
 
 </div>
 

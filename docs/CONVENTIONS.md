@@ -20,7 +20,7 @@ Every action in this repo follows this standard. It's what keeps the quality bar
 - Always include `name`, `description`, `author: "amoussa1229"`, and `branding` (icon + color).
 - Every input documented with `description`, `required`, and a `default` where applicable.
 - Every output documented (names must exactly match what the code sets).
-- JS actions: `runs.using: node20`, `runs.main: dist/index.js`.
+- JS actions: `runs.using: node24`, `runs.main: dist/index.js`.
 - Token inputs use `default: ${{ github.token }}` (established runner-evaluated pattern — actions/stale, actions/labeler, codeql-action all do this) and code must guard with `if (token)` so a missing token degrades gracefully, never crashes.
 
 ## Behavior & safety
@@ -51,7 +51,7 @@ Every action in this repo follows this standard. It's what keeps the quality bar
 - Each action has `.github/workflows/test-<name>.yml`: a `unit` job (`npm ci && npm test` for JS; `node --test` for composites) and an `integration` job that invokes the action via `uses: ./actions/<name>` and asserts on real outputs (the job must fail if output is wrong).
 - Integration assertions must be deterministic on both `push` and `pull_request` events.
 - Test workflow triggers on `pull_request` and `push` filtered to `actions/<name>/**` and the workflow file itself.
-- Repo pins Node 20 via root `.nvmrc`; `npm test` is bare `node --test` (works on Node 20; `node --test test/` breaks on Node 22+).
+- Repo pins Node 24 via root `.nvmrc` to match the `node24` runtime; `npm test` is bare `node --test` (the `node --test test/` directory form broke on Node 22+ — keep the bare form).
 
 ## Documentation
 

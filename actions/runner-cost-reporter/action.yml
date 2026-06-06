@@ -42,5 +42,5 @@ outputs:
     description: 'HTML URL of the created/updated issue, or "" when no issue was written.'
 
 runs:
-  using: "node20"
+  using: "node24"
   main: "dist/index.js"
