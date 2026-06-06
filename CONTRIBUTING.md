@@ -2,6 +2,8 @@
 
 Thanks for considering a contribution. This repo has one rule that everything else follows from: **an action only lands if it actually works, is documented, and has a test that proves it.** That's what keeps this collection trustworthy.
 
+The full standard every action is reviewed against lives in [docs/CONVENTIONS.md](docs/CONVENTIONS.md) — read it before building.
+
 ## What belongs here
 
 - Actions that solve a real, specific problem well.
