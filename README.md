@@ -30,6 +30,7 @@ A few flagship actions are also mirrored to standalone repositories and publishe
 | [pr-size-tagger](actions/pr-size-tagger) | Labels a pull request by size bin (size/XS–XL) with an optional too-large warning. | JS |
 | [secret-canary](actions/secret-canary) | Scans for leaked secrets (gitleaks/trufflehog) and posts a redacted PR comment. | Composite |
 | [stale-branch-reaper](actions/stale-branch-reaper) | Lists (optionally deletes) merged branches older than N days; dry-run by default. | JS |
+| [changelog-from-commits](actions/changelog-from-commits) | Builds a changelog from conventional commits and opens a PR. | JS |
 
 ## Repository layout
 

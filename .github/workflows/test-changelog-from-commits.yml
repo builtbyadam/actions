@@ -1,0 +1,92 @@
+name: test-changelog-from-commits
+
+on:
+  pull_request:
+    paths:
+      - "actions/changelog-from-commits/**"
+      - ".github/workflows/test-changelog-from-commits.yml"
+  push:
+    branches: [main]
+    paths:
+      - "actions/changelog-from-commits/**"
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "20"
+      - working-directory: actions/changelog-from-commits
+        run: |
+          npm ci
+          npm test
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+
+      # Build a throwaway git repo with scripted conventional commits. The
+      # action's git/file operations run against this fixture via
+      # working-directory; we never open a PR (open-pr: false).
+      - name: Create fixture repo
+        run: |
+          set -euo pipefail
+          FIXTURE="$RUNNER_TEMP/changelog-fixture"
+          rm -rf "$FIXTURE"
+          mkdir -p "$FIXTURE"
+          git -C "$FIXTURE" init -q
+          git -C "$FIXTURE" config user.email "test@example.com"
+          git -C "$FIXTURE" config user.name "Test User"
+          echo "1" > "$FIXTURE/a.txt"
+          git -C "$FIXTURE" add -A
+          git -C "$FIXTURE" commit -q -m "feat: add the thing"
+          echo "2" > "$FIXTURE/b.txt"
+          git -C "$FIXTURE" add -A
+          git -C "$FIXTURE" commit -q -m "fix(api): handle null"
+          echo "3" > "$FIXTURE/c.txt"
+          git -C "$FIXTURE" add -A
+          git -C "$FIXTURE" commit -q -m "chore: bump deps"
+          echo "4" > "$FIXTURE/d.txt"
+          git -C "$FIXTURE" add -A
+          git -C "$FIXTURE" commit -q -m "this is not a conventional commit"
+          echo "FIXTURE=$FIXTURE" >> "$GITHUB_ENV"
+
+      - id: changelog
+        uses: ./actions/changelog-from-commits
+        with:
+          working-directory: ${{ env.FIXTURE }}
+          from-ref: ""
+          to-ref: HEAD
+          open-pr: "false"
+
+      - name: Assert outputs and file
+        env:
+          ENTRIES: ${{ steps.changelog.outputs.entries-count }}
+          PR_URL: ${{ steps.changelog.outputs.pr-url }}
+          CHANGELOG: ${{ steps.changelog.outputs.changelog }}
+        run: |
+          node -e '
+            const assert = require("node:assert");
+            const fs = require("fs");
+            const path = require("path");
+            // feat + fix + chore conform; the non-conventional commit is skipped.
+            assert.strictEqual(process.env.ENTRIES, "3", "entries-count should be 3");
+            assert.strictEqual(process.env.PR_URL, "", "pr-url should be empty when open-pr is false");
+            const cl = process.env.CHANGELOG;
+            assert.ok(cl.includes("Features"), "changelog should contain a Features section");
+            assert.ok(cl.includes("add the thing"), "changelog should contain the feat subject");
+            const file = path.join(process.env.FIXTURE, "CHANGELOG.md");
+            assert.ok(fs.existsSync(file), "CHANGELOG.md should exist in the fixture");
+            const content = fs.readFileSync(file, "utf8");
+            assert.ok(content.includes("### Features"), "file should contain the Features section");
+            assert.ok(content.includes("add the thing"), "file should contain the feat subject");
+            console.log("OK: entries=3, file written, pr-url empty");
+          '
