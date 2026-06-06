@@ -1,0 +1,20 @@
+name: "new-action"
+description: "One-line description of what this action does. Replace me."
+author: "amoussa1229"
+branding:
+  icon: "zap"
+  color: "blue"
+
+inputs:
+  example-input:
+    description: "Replace with a real input. Describe it clearly."
+    required: false
+    default: "hello"
+
+outputs:
+  example-output:
+    description: "Replace with a real output."
+
+runs:
+  using: "node20"
+  main: "dist/index.js"

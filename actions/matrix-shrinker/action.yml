@@ -1,0 +1,48 @@
+name: "matrix-shrinker"
+description: "Shrink a job matrix to only the entries relevant to the changed files of a push or pull request."
+author: "amoussa1229"
+branding:
+  icon: "filter"
+  color: "blue"
+
+inputs:
+  matrix:
+    description: >-
+      The full matrix as JSON: either {"include": [...]} or a bare array of
+      entry objects.
+    required: true
+  rules:
+    description: >-
+      JSON array of rules: [{"paths": ["api/**"], "select": {"name": "api"}}].
+      A rule is active when any changed file matches any of its path globs;
+      an entry is kept when any active rule selects it. Omitting "select"
+      keeps every entry (useful for "infra changed, run everything" rules).
+    required: true
+  changed-files:
+    description: >-
+      Newline-separated list of changed file paths. When omitted, the list is
+      derived from the triggering pull request or push via the GitHub API.
+    required: false
+    default: ""
+  github-token:
+    description: "Token used to derive changed files when changed-files is omitted."
+    required: false
+    default: ${{ github.token }}
+  fallback:
+    description: >-
+      What to emit when the changed files cannot be determined: "full" (the
+      whole matrix - safe default) or "empty".
+    required: false
+    default: "full"
+
+outputs:
+  matrix:
+    description: 'The shrunk matrix as JSON: {"include": [...]}. Feed it to fromJSON().'
+  count:
+    description: "Number of matrix entries kept."
+  skipped:
+    description: "Number of matrix entries dropped."
+
+runs:
+  using: "node20"
+  main: "dist/index.js"

@@ -1,0 +1,83 @@
+name: test-matrix-shrinker
+
+on:
+  pull_request:
+    paths:
+      - "actions/matrix-shrinker/**"
+      - ".github/workflows/test-matrix-shrinker.yml"
+  push:
+    branches: [main]
+    paths:
+      - "actions/matrix-shrinker/**"
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "20"
+      - working-directory: actions/matrix-shrinker
+        run: |
+          npm ci
+          npm test
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      # Scenario 1: explicit changed files shrink the matrix
+      - id: shrink
+        uses: ./actions/matrix-shrinker
+        with:
+          matrix: |
+            {"include": [
+              {"name": "api",  "dir": "api"},
+              {"name": "web",  "dir": "web"},
+              {"name": "docs", "dir": "docs"}
+            ]}
+          rules: |
+            [
+              {"paths": ["api/**", "shared/**"], "select": {"name": "api"}},
+              {"paths": ["web/**", "shared/**"], "select": {"name": "web"}},
+              {"paths": ["docs/**"],             "select": {"name": "docs"}}
+            ]
+          changed-files: |
+            api/server.js
+            shared/util.js
+      - name: Assert shrunk matrix
+        env:
+          MATRIX: ${{ steps.shrink.outputs.matrix }}
+          COUNT: ${{ steps.shrink.outputs.count }}
+          SKIPPED: ${{ steps.shrink.outputs.skipped }}
+        run: |
+          node -e '
+            const assert = require("node:assert");
+            const matrix = JSON.parse(process.env.MATRIX);
+            assert.deepStrictEqual(matrix.include.map((e) => e.name).sort(), ["api", "web"]);
+            assert.strictEqual(process.env.COUNT, "2");
+            assert.strictEqual(process.env.SKIPPED, "1");
+            console.log("OK:", process.env.MATRIX);
+          '
+
+      # Scenario 2: changed files indeterminable + fallback=empty emits nothing
+      - id: fallback
+        uses: ./actions/matrix-shrinker
+        with:
+          matrix: '[{"name": "api"}, {"name": "web"}]'
+          rules: '[{"paths": ["api/**"], "select": {"name": "api"}}]'
+          github-token: ""
+          fallback: empty
+      - name: Assert empty fallback
+        env:
+          MATRIX: ${{ steps.fallback.outputs.matrix }}
+          COUNT: ${{ steps.fallback.outputs.count }}
+        run: |
+          node -e '
+            const assert = require("node:assert");
+            assert.deepStrictEqual(JSON.parse(process.env.MATRIX), { include: [] });
+            assert.strictEqual(process.env.COUNT, "0");
+            console.log("OK: fallback=empty emitted an empty matrix");
+          '
