@@ -44,5 +44,5 @@ outputs:
     description: "Number of matrix entries dropped."
 
 runs:
-  using: "node20"
+  using: "node24"
   main: "dist/index.js"

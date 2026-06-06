@@ -36,7 +36,7 @@ jobs:
       - uses: actions/checkout@<sha>
       - uses: actions/setup-node@<sha>
         with:
-          node-version: "20"
+          node-version: "24"
       - run: npm ci
       - uses: builtbyadam/actions/license-auditor@<commit-sha>
         with:
