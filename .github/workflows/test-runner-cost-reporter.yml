@@ -1,0 +1,53 @@
+name: test-runner-cost-reporter
+
+on:
+  pull_request:
+    paths:
+      - "actions/runner-cost-reporter/**"
+      - ".github/workflows/test-runner-cost-reporter.yml"
+  push:
+    branches: [main]
+    paths:
+      - "actions/runner-cost-reporter/**"
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "20"
+      - working-directory: actions/runner-cost-reporter
+        run: |
+          npm ci
+          npm test
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      # Read-only run against this repo: no issue is written.
+      - id: report
+        uses: ./actions/runner-cost-reporter
+        with:
+          create-issue: "false"
+          window-days: "7"
+      - name: Assert read-only outputs
+        env:
+          REPORT: ${{ steps.report.outputs.report }}
+          TOTAL: ${{ steps.report.outputs.total-minutes }}
+          ISSUE_URL: ${{ steps.report.outputs.issue-url }}
+        run: |
+          node -e '
+            const assert = require("node:assert");
+            assert.strictEqual(process.env.ISSUE_URL, "", "issue-url must be empty when create-issue=false");
+            assert.ok(Number(process.env.TOTAL) >= 0, "total-minutes must be a non-negative number");
+            const report = JSON.parse(process.env.REPORT);
+            assert.ok(Array.isArray(report), "report must parse as a JSON array");
+            console.log("OK:", { total: process.env.TOTAL, groups: report.length });
+          '
