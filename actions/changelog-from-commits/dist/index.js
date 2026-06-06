@@ -35940,8 +35940,10 @@ async function isShallow(cwd) {
 
 /**
  * Resolve the effective from-ref. When the input is empty, use the latest tag
- * (`git describe --tags --abbrev=0`); when there are no tags, fall back to the
- * repository's root commit.
+ * (`git describe --tags --abbrev=0`); when there are no tags, return null,
+ * meaning "the beginning of history". (A root-commit SHA would NOT work here:
+ * `git log <root>..<to>` is an exclusive range and silently drops the root
+ * commit itself from the changelog.)
  */
 async function resolveFromRef(input, cwd) {
   if (input) return input;
@@ -35952,20 +35954,23 @@ async function resolveFromRef(input, cwd) {
       return tag;
     }
   } catch {
-    // No tags — fall through to the root commit.
+    // No tags — fall through to the beginning of history.
   }
-  const root = (await git(["rev-list", "--max-parents=0", "HEAD"], cwd)).trim().split(/\s+/)[0];
-  core.info(`from-ref not given and no tags found; using root commit "${root.slice(0, 7)}".`);
-  return root;
+  core.info("from-ref not given and no tags found; using the full history.");
+  return null;
 }
 
-/** Read the git log for `from..to` and parse it into structured commits. */
+/**
+ * Read the git log for `from..to` (or all of `to` when `from` is null —
+ * inclusive of the root commit) and parse it into structured commits.
+ */
 async function readRangeCommits(fromRef, toRef, cwd) {
   // When the endpoints are identical the range is empty by definition.
-  if (fromRef === toRef) return [];
+  if (fromRef !== null && fromRef === toRef) return [];
   // %H<US>%B<RS> — hash, unit separator, full body, record separator.
   const format = `%H${UNIT}%B${RECORD}`;
-  const raw = await git(["log", `${fromRef}..${toRef}`, `--format=${format}`], cwd);
+  const range = fromRef === null ? toRef : `${fromRef}..${toRef}`;
+  const raw = await git(["log", range, `--format=${format}`], cwd);
   return parseLog(raw);
 }
 
