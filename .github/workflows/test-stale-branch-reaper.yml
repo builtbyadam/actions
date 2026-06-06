@@ -1,0 +1,61 @@
+name: test-stale-branch-reaper
+
+on:
+  pull_request:
+    paths:
+      - "actions/stale-branch-reaper/**"
+      - ".github/workflows/test-stale-branch-reaper.yml"
+  push:
+    branches: [main]
+    paths:
+      - "actions/stale-branch-reaper/**"
+
+permissions:
+  contents: read # integration is dry-run only
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "20"
+      - working-directory: actions/stale-branch-reaper
+        run: |
+          npm ci
+          npm test
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      # Dry-run (default confirm) with older-than-days "0": eligible branches
+      # are reported but nothing is ever deleted.
+      - id: reap
+        uses: ./actions/stale-branch-reaper
+        with:
+          older-than-days: "0"
+      - name: Assert dry-run deleted nothing and report is a JSON array
+        env:
+          DELETED_COUNT: ${{ steps.reap.outputs.deleted-count }}
+          REPORT: ${{ steps.reap.outputs.report }}
+        run: |
+          node -e '
+            const assert = require("node:assert");
+            assert.strictEqual(process.env.DELETED_COUNT, "0", "dry-run must delete zero branches");
+            const report = JSON.parse(process.env.REPORT);
+            assert.ok(Array.isArray(report), "report must be a JSON array");
+            for (const row of report) {
+              assert.ok(typeof row.branch === "string");
+              assert.ok("last_commit_date" in row);
+              assert.ok("merged" in row);
+              assert.ok(
+                ["would-delete", "deleted", "skipped-protected", "skipped-recent", "skipped-unmerged"].includes(row.action),
+                `unexpected action: ${row.action}`
+              );
+              assert.notStrictEqual(row.action, "deleted", "dry-run must not report deleted rows");
+            }
+            console.log("OK: dry-run deleted-count=0, report has", report.length, "row(s)");
+          '

@@ -31,4 +31,12 @@ updates:
     groups:
       npm-minor-patch:
         update-types: ["minor", "patch"]
+
+  - package-ecosystem: "npm"
+    directory: "/actions/stale-branch-reaper"
+    schedule:
+      interval: "weekly"
+    groups:
+      npm-minor-patch:
+        update-types: ["minor", "patch"]
   # Add one npm block per JS action directory as you add them.
