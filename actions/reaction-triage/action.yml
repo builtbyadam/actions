@@ -1,0 +1,61 @@
+name: "reaction-triage"
+description: "Label, comment on, or close open issues whose emoji reactions cross a threshold. Close is gated behind a confirm flag."
+author: "amoussa1229"
+branding:
+  icon: "thumbs-up"
+  color: "yellow"
+
+inputs:
+  reaction:
+    description: >-
+      The emoji reaction to count. One of: +1, -1, laugh, confused, heart,
+      hooray, rocket, eyes.
+    required: false
+    default: "+1"
+  threshold:
+    description: >-
+      The reaction count an issue must reach (>=) to be acted on. A positive
+      integer.
+    required: true
+  on-cross:
+    description: >-
+      What to do when an issue crosses the threshold: "label" (add label-name),
+      "comment" (post comment-body once), or "close" (close the issue —
+      semi-destructive, gated behind confirm).
+    required: false
+    default: "label"
+  label-name:
+    description: 'The label to add in "label" mode.'
+    required: false
+    default: "popular"
+  comment-body:
+    description: >-
+      The comment to post in "comment" mode. {count} and {reaction} are
+      templated with the issue's reaction count and the reaction name. A hidden
+      marker is appended so the action never comments on the same issue twice.
+    required: false
+    default: "This issue crossed {count} :{reaction}: reactions and has been flagged for triage."
+  confirm:
+    description: >-
+      Set to "true" to actually close issues in "close" mode. Defaults to
+      "false" (dry-run): close mode reports what it would close and performs
+      zero mutations. Has no effect on label/comment modes (those act directly).
+    required: false
+    default: "false"
+  github-token:
+    description: "Token used to list issues and apply labels/comments/closures. Needs issues:write to mutate."
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  affected-count:
+    description: "Number of issues actually acted on (0 in close-mode dry-run)."
+  report:
+    description: >-
+      JSON array of {number, title, reactions, action} where action is
+      "labeled", "commented", "closed", "would-close", or
+      "skipped-already-acted".
+
+runs:
+  using: "node20"
+  main: "dist/index.js"

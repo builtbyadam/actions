@@ -1,0 +1,53 @@
+name: test-reaction-triage
+
+on:
+  pull_request:
+    paths:
+      - "actions/reaction-triage/**"
+      - ".github/workflows/test-reaction-triage.yml"
+  push:
+    branches: [main]
+    paths:
+      - "actions/reaction-triage/**"
+
+permissions:
+  issues: read
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "20"
+      - working-directory: actions/reaction-triage
+        run: |
+          npm ci
+          npm test
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      # Huge threshold means nothing crosses → read-only, deterministic on push and PR.
+      - id: triage
+        uses: ./actions/reaction-triage
+        with:
+          reaction: "+1"
+          threshold: "999999"
+          on-cross: "label"
+      - name: Assert nothing was affected
+        env:
+          AFFECTED: ${{ steps.triage.outputs.affected-count }}
+          REPORT: ${{ steps.triage.outputs.report }}
+        run: |
+          node -e '
+            const assert = require("node:assert");
+            assert.strictEqual(process.env.AFFECTED, "0");
+            const report = JSON.parse(process.env.REPORT);
+            assert.ok(Array.isArray(report), "report must be a JSON array");
+            console.log("OK: affected-count=0, report is an array of length", report.length);
+          '
