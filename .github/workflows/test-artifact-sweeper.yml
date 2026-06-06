@@ -1,0 +1,54 @@
+name: test-artifact-sweeper
+
+on:
+  pull_request:
+    paths:
+      - "actions/artifact-sweeper/**"
+      - ".github/workflows/test-artifact-sweeper.yml"
+  push:
+    branches: [main]
+    paths:
+      - "actions/artifact-sweeper/**"
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "20"
+      - working-directory: actions/artifact-sweeper
+        run: |
+          npm ci
+          npm test
+
+  integration:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      # Dry-run (default confirm) with older-than-days=0 so the run is
+      # deterministic on both push and pull_request events: nothing is deleted.
+      - id: sweep
+        uses: ./actions/artifact-sweeper
+        with:
+          older-than-days: "0"
+      - name: Assert dry-run outputs
+        env:
+          DRY_RUN: ${{ steps.sweep.outputs.dry-run }}
+          DELETED: ${{ steps.sweep.outputs.deleted-count }}
+          RECLAIMED: ${{ steps.sweep.outputs.reclaimed-bytes }}
+          REPORT: ${{ steps.sweep.outputs.report }}
+        run: |
+          node -e '
+            const assert = require("node:assert");
+            assert.strictEqual(process.env.DRY_RUN, "true", "expected dry-run");
+            assert.strictEqual(process.env.DELETED, "0", "dry-run must delete nothing");
+            assert.strictEqual(process.env.RECLAIMED, "0", "dry-run must reclaim nothing");
+            const report = JSON.parse(process.env.REPORT);
+            assert.ok(Array.isArray(report), "report must be a JSON array");
+            console.log("OK: dry-run, deleted-count=0, reclaimed-bytes=0, report is an array of", report.length);
+          '

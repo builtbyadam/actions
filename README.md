@@ -25,6 +25,7 @@ A few flagship actions are also mirrored to standalone repositories and publishe
 | Action | Description | Type |
 |---|---|---|
 | [matrix-shrinker](actions/matrix-shrinker) | Emits a job matrix containing only the entries relevant to the changed paths. | JS |
+| [artifact-sweeper](actions/artifact-sweeper) | Deletes old workflow artifacts and caches to reclaim storage; dry-run by default. | JS |
 
 ## Repository layout
 
