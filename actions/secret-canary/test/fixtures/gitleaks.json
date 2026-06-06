@@ -1,0 +1,22 @@
+[
+  {
+    "Description": "Generic API Key",
+    "StartLine": 12,
+    "EndLine": 12,
+    "File": "config/settings.py",
+    "Commit": "a1b2c3d4e5f60718293a4b5c6d7e8f9012345678",
+    "RuleID": "generic-api-key",
+    "Secret": "fixture-value-redacted",
+    "Match": "api_key = fixture-value-redacted"
+  },
+  {
+    "Description": "AWS Access Key",
+    "StartLine": 5,
+    "EndLine": 5,
+    "File": "deploy/env.sh",
+    "Commit": "00112233445566778899aabbccddeeff00112233",
+    "RuleID": "aws-access-token",
+    "Secret": "fixture-value-redacted",
+    "Match": "AWS_KEY=fixture-value-redacted"
+  }
+]

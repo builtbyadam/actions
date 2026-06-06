@@ -1,0 +1,3 @@
+{"DetectorType":17,"DetectorName":"Generic","Verified":false,"Raw":"fixture-value-redacted","Redacted":"fixture-value-redacted","SourceMetadata":{"Data":{"Filesystem":{"file":"config/settings.py","line":12}}}}
+{"level":"info","msg":"running source","source_name":"filesystem"}
+{"DetectorType":2,"DetectorName":"AWS","Verified":false,"Raw":"fixture-value-redacted","Redacted":"fixture-value-redacted","SourceMetadata":{"Data":{"Filesystem":{"file":"deploy/env.sh","line":5}}}}

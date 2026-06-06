@@ -1,0 +1,161 @@
+name: "secret-canary"
+description: >-
+  Scan the checked-out tree for leaked secrets (gitleaks or trufflehog) with a
+  curated allowlist, and post the findings as a single upserted pull-request
+  comment instead of failing silently.
+author: "amoussa1229"
+branding:
+  icon: "alert-triangle"
+  color: "orange"
+
+inputs:
+  scanner:
+    description: >-
+      Which scanner to run: "gitleaks" or "trufflehog".
+    required: false
+    default: "gitleaks"
+  scanner-version:
+    description: >-
+      Release tag of the selected scanner to download (e.g. "v8.30.1" for
+      gitleaks, "v3.95.5" for trufflehog). The default is the pinned latest
+      release for gitleaks; if you select trufflehog you should set this to a
+      trufflehog tag (default for trufflehog is "v3.95.5").
+    required: false
+    default: "v8.30.1"
+  allowlist-path:
+    description: >-
+      Optional path to an allowlist file. For gitleaks this is passed as
+      `--config` (a gitleaks TOML config with an [allowlist] section). For
+      trufflehog this is passed as `--exclude-paths` (a file of newline-
+      separated path globs to skip). The two scanners use different formats.
+    required: false
+    default: ""
+  comment-on-pr:
+    description: >-
+      When "true" and the event is a pull request with a token, upsert a single
+      findings comment on the PR. Any other value disables commenting.
+    required: false
+    default: "true"
+  fail-on-findings:
+    description: >-
+      When "true", the action exits non-zero if any findings are detected
+      (after writing outputs and posting the comment). Set to "false" to report
+      without blocking.
+    required: false
+    default: "true"
+  github-token:
+    description: "Token used to list and upsert the pull-request comment."
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  findings-count:
+    description: "Number of potential secrets found."
+    value: ${{ steps.scan.outputs.findings-count }}
+  report:
+    description: >-
+      Redacted JSON array of findings, each {rule, file, line, commit?}. Never
+      contains the secret value or the matched text.
+    value: ${{ steps.scan.outputs.report }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Validate inputs and resolve download URL
+      id: resolve
+      shell: bash
+      env:
+        SCANNER: ${{ inputs.scanner }}
+        SCANNER_VERSION: ${{ inputs.scanner-version }}
+        COMMENT_ON_PR: ${{ inputs.comment-on-pr }}
+        FAIL_ON_FINDINGS: ${{ inputs.fail-on-findings }}
+      run: |
+        set -euo pipefail
+
+        if [ "$SCANNER" != "gitleaks" ] && [ "$SCANNER" != "trufflehog" ]; then
+          echo 'Input "scanner" must be one of: gitleaks, trufflehog' >&2
+          exit 1
+        fi
+        if [ -z "$SCANNER_VERSION" ]; then
+          echo 'Input "scanner-version" must be a non-empty release tag (e.g. v8.30.1)' >&2
+          exit 1
+        fi
+        if [ "$COMMENT_ON_PR" != "true" ] && [ "$COMMENT_ON_PR" != "false" ]; then
+          echo 'Input "comment-on-pr" must be "true" or "false"' >&2
+          exit 1
+        fi
+        if [ "$FAIL_ON_FINDINGS" != "true" ] && [ "$FAIL_ON_FINDINGS" != "false" ]; then
+          echo 'Input "fail-on-findings" must be "true" or "false"' >&2
+          exit 1
+        fi
+
+        OS="$(uname -s)"
+        ARCH="$(uname -m)"
+        if [ "$OS" != "Linux" ] || [ "$ARCH" != "x86_64" ]; then
+          echo "Input \"runner\" must be a Linux x64 runner; got OS=$OS ARCH=$ARCH. secret-canary only supports linux/x64 runners." >&2
+          exit 1
+        fi
+
+        VER="$SCANNER_VERSION"
+        # Strip a leading "v" for version-bearing filenames.
+        NOV="${VER#v}"
+        if [ "$SCANNER" = "gitleaks" ]; then
+          URL="https://github.com/gitleaks/gitleaks/releases/download/${VER}/gitleaks_${NOV}_linux_x64.tar.gz"
+        else
+          URL="https://github.com/trufflesecurity/trufflehog/releases/download/${VER}/trufflehog_${NOV}_linux_amd64.tar.gz"
+        fi
+        echo "url=$URL" >> "$GITHUB_OUTPUT"
+        echo "Resolved $SCANNER $VER download: $URL"
+
+    - name: Download and extract scanner
+      shell: bash
+      env:
+        URL: ${{ steps.resolve.outputs.url }}
+        SCANNER: ${{ inputs.scanner }}
+      run: |
+        set -euo pipefail
+        TARBALL="$RUNNER_TEMP/secret-canary-scanner.tar.gz"
+        curl -sSL "$URL" -o "$TARBALL"
+        tar -xzf "$TARBALL" -C "$RUNNER_TEMP" "$SCANNER"
+        chmod +x "$RUNNER_TEMP/$SCANNER"
+        "$RUNNER_TEMP/$SCANNER" --version
+        echo "$SCANNER installed to $RUNNER_TEMP/$SCANNER"
+
+    - name: Scan workspace
+      shell: bash
+      env:
+        SCANNER: ${{ inputs.scanner }}
+        ALLOWLIST_PATH: ${{ inputs.allowlist-path }}
+      run: |
+        set -uo pipefail
+        BIN="$RUNNER_TEMP/$SCANNER"
+        OUT="$RUNNER_TEMP/scan.json"
+        if [ "$SCANNER" = "gitleaks" ]; then
+          ARGS=(detect --source . --no-banner --redact --report-format json --report-path "$OUT" --exit-code 0)
+          if [ -n "$ALLOWLIST_PATH" ]; then
+            ARGS+=(--config "$ALLOWLIST_PATH")
+          fi
+          "$BIN" "${ARGS[@]}"
+        else
+          ARGS=(filesystem . --json --no-update)
+          if [ -n "$ALLOWLIST_PATH" ]; then
+            ARGS+=(--exclude-paths "$ALLOWLIST_PATH")
+          fi
+          # trufflehog exits nonzero when results are found / on update checks;
+          # tolerate it and let the processor decide the verdict.
+          "$BIN" "${ARGS[@]}" > "$OUT" || true
+        fi
+        echo "Scan complete; raw report at $OUT"
+
+    - name: Process, redact, comment, and verdict
+      id: scan
+      shell: bash
+      env:
+        SCANNER: ${{ inputs.scanner }}
+        SCAN_REPORT_PATH: ${{ runner.temp }}/scan.json
+        COMMENT_ON_PR: ${{ inputs.comment-on-pr }}
+        FAIL_ON_FINDINGS: ${{ inputs.fail-on-findings }}
+        GITHUB_TOKEN: ${{ inputs.github-token }}
+      run: |
+        set -euo pipefail
+        node "$GITHUB_ACTION_PATH/src/report.js"
