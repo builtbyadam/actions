@@ -1,0 +1,49 @@
+name: sync-mirrors
+
+on:
+  push:
+    branches: [main]
+
+# Map action dir -> mirror repo here. Only listed actions are mirrored.
+env:
+  # format: "<action>:<owner/repo>" space-separated
+  MIRRORS: >-
+    matrix-shrinker:builtbyadam/matrix-shrinker
+    artifact-sweeper:builtbyadam/artifact-sweeper
+    license-auditor:builtbyadam/license-auditor
+    pr-size-tagger:builtbyadam/pr-size-tagger
+    secret-canary:builtbyadam/secret-canary
+    stale-branch-reaper:builtbyadam/stale-branch-reaper
+    changelog-from-commits:builtbyadam/changelog-from-commits
+    downstream-canary:builtbyadam/downstream-canary
+    runner-cost-reporter:builtbyadam/runner-cost-reporter
+    reaction-triage:builtbyadam/reaction-triage
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+      - name: Determine changed actions and sync
+        env:
+          TOKEN: ${{ secrets.MIRROR_SYNC_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "MIRROR_SYNC_TOKEN is not set; skipping mirror sync." >&2
+            exit 0
+          fi
+          CHANGED="$(git diff --name-only ${{ github.event.before }} ${{ github.sha }} 2>/dev/null | grep '^actions/' | cut -d/ -f2 | sort -u || true)"
+          if [ -z "$CHANGED" ]; then
+            echo "No action directories changed; nothing to sync."
+            exit 0
+          fi
+          for pair in $MIRRORS; do
+            action="${pair%%:*}"
+            mirror="${pair##*:}"
+            if echo "$CHANGED" | grep -qx "$action"; then
+              echo "Syncing $action -> $mirror"
+              ./scripts/sync-subtree.sh "$action" "$mirror" "$TOKEN"
+            fi
+          done
