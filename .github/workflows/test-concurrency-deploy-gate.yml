@@ -1,6 +1,7 @@
 name: test-concurrency-deploy-gate
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - ".github/workflows/concurrency-deploy-gate.yml"

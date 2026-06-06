@@ -1,6 +1,7 @@
 name: test-matrix-shrinker
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "actions/matrix-shrinker/**"
@@ -25,6 +26,9 @@ jobs:
 
   integration:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read  # changed-file derivation calls pulls.listFiles
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
@@ -80,4 +84,25 @@ jobs:
             assert.deepStrictEqual(JSON.parse(process.env.MATRIX), { include: [] });
             assert.strictEqual(process.env.COUNT, "0");
             console.log("OK: fallback=empty emitted an empty matrix");
+          '
+
+      # Scenario 3: derivation via the runner-injected github.token default.
+      # No changed-files, no explicit token; fallback=empty makes the result
+      # discriminating — count=3 proves the token default resolved AND the
+      # changed-file API call succeeded (a failure would fall back to 0).
+      - id: derive
+        uses: ./actions/matrix-shrinker
+        with:
+          matrix: '[{"name": "a"}, {"name": "b"}, {"name": "c"}]'
+          rules: '[{"paths": ["**"]}]'
+          fallback: empty
+      - name: Assert derived matrix
+        env:
+          COUNT: ${{ steps.derive.outputs.count }}
+        run: |
+          node -e '
+            const assert = require("node:assert");
+            assert.strictEqual(process.env.COUNT, "3",
+              "expected the catch-all rule to keep all 3 entries via derived changed files");
+            console.log("OK: changed files derived with the default github.token");
           '

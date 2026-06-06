@@ -1,6 +1,7 @@
 name: test-reaction-triage
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "actions/reaction-triage/**"

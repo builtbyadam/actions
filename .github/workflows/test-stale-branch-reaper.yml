@@ -1,6 +1,7 @@
 name: test-stale-branch-reaper
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "actions/stale-branch-reaper/**"
@@ -42,6 +43,7 @@ jobs:
           DELETED_COUNT: ${{ steps.reap.outputs.deleted-count }}
           REPORT: ${{ steps.reap.outputs.report }}
         run: |
+          # shellcheck disable=SC2016  # JS template literals, not shell expansion
           node -e '
             const assert = require("node:assert");
             assert.strictEqual(process.env.DELETED_COUNT, "0", "dry-run must delete zero branches");

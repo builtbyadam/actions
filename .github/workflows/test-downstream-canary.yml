@@ -1,6 +1,7 @@
 name: test-downstream-canary
 
 on:
+  workflow_dispatch:
   pull_request:
     paths:
       - "actions/downstream-canary/**"
