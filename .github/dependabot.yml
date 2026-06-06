@@ -15,6 +15,13 @@ updates:
     groups:
       npm-minor-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # @actions/core >=3 and @actions/github >=9 are ESM-only and break
+      # CJS + ncc bundling (see docs/CONVENTIONS.md). Majors stay manual.
+      - dependency-name: "@actions/core"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@actions/github"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directory: "/actions/artifact-sweeper"
@@ -23,6 +30,13 @@ updates:
     groups:
       npm-minor-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # @actions/core >=3 and @actions/github >=9 are ESM-only and break
+      # CJS + ncc bundling (see docs/CONVENTIONS.md). Majors stay manual.
+      - dependency-name: "@actions/core"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@actions/github"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directory: "/actions/pr-size-tagger"
@@ -31,6 +45,13 @@ updates:
     groups:
       npm-minor-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # @actions/core >=3 and @actions/github >=9 are ESM-only and break
+      # CJS + ncc bundling (see docs/CONVENTIONS.md). Majors stay manual.
+      - dependency-name: "@actions/core"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@actions/github"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directory: "/actions/stale-branch-reaper"
@@ -39,6 +60,13 @@ updates:
     groups:
       npm-minor-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # @actions/core >=3 and @actions/github >=9 are ESM-only and break
+      # CJS + ncc bundling (see docs/CONVENTIONS.md). Majors stay manual.
+      - dependency-name: "@actions/core"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@actions/github"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directory: "/actions/changelog-from-commits"
@@ -47,6 +75,13 @@ updates:
     groups:
       npm-minor-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # @actions/core >=3 and @actions/github >=9 are ESM-only and break
+      # CJS + ncc bundling (see docs/CONVENTIONS.md). Majors stay manual.
+      - dependency-name: "@actions/core"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@actions/github"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directory: "/actions/runner-cost-reporter"
@@ -55,6 +90,13 @@ updates:
     groups:
       npm-minor-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # @actions/core >=3 and @actions/github >=9 are ESM-only and break
+      # CJS + ncc bundling (see docs/CONVENTIONS.md). Majors stay manual.
+      - dependency-name: "@actions/core"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@actions/github"
+        update-types: ["version-update:semver-major"]
 
   - package-ecosystem: "npm"
     directory: "/actions/reaction-triage"
@@ -63,4 +105,11 @@ updates:
     groups:
       npm-minor-patch:
         update-types: ["minor", "patch"]
+    ignore:
+      # @actions/core >=3 and @actions/github >=9 are ESM-only and break
+      # CJS + ncc bundling (see docs/CONVENTIONS.md). Majors stay manual.
+      - dependency-name: "@actions/core"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@actions/github"
+        update-types: ["version-update:semver-major"]
   # Add one npm block per JS action directory as you add them.
