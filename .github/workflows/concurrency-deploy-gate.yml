@@ -1,0 +1,76 @@
+# concurrency-deploy-gate — reusable workflow (NOT an action)
+#
+# Reference implementation of correct `concurrency` groups so two deploys to
+# the same environment can never race. Call it via `workflow_call`:
+#
+#   jobs:
+#     deploy-prod:
+#       uses: builtbyadam/actions/.github/workflows/concurrency-deploy-gate.yml@<commit-sha>
+#       with:
+#         environment: production
+#         deploy-command: ./scripts/deploy.sh production
+#
+# Queue vs cancel — the tradeoff this gate exists to make explicit:
+#   cancel-in-progress: false (default)  Deploys QUEUE behind an in-flight
+#     deploy. Safest: a mid-deploy run is never killed half-applied.
+#   cancel-in-progress: true             A newer deploy CANCELS the in-flight
+#     one. Lowest latency to newest code, but only safe when your deploy is
+#     atomic/idempotent and can be interrupted at any point.
+#
+# Caveat (GitHub semantics): a concurrency group holds at most ONE pending
+# run. If three deploys arrive while one is in flight, only the newest stays
+# queued — the middle ones are cancelled. Deploys must therefore converge on
+# the latest state rather than assume every intermediate version ships.
+
+name: concurrency-deploy-gate
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Environment name; scopes the concurrency group (deploy-<environment>)."
+        required: true
+        type: string
+      deploy-command:
+        description: "Shell command that performs the deploy."
+        required: true
+        type: string
+      cancel-in-progress:
+        description: "true = newer deploys cancel in-flight ones; false (default) = queue behind them."
+        required: false
+        type: boolean
+        default: false
+      runs-on:
+        description: "Runner label for the deploy job."
+        required: false
+        type: string
+        default: "ubuntu-latest"
+    outputs:
+      deployed:
+        description: "true when the deploy command exited 0."
+        value: ${{ jobs.deploy.outputs.deployed }}
+
+jobs:
+  deploy:
+    runs-on: ${{ inputs.runs-on }}
+    # Job-level concurrency: workflow-level `concurrency` in a called reusable
+    # workflow does not protect the caller — the job level is what serializes.
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: ${{ inputs.cancel-in-progress }}
+    outputs:
+      deployed: ${{ steps.run.outputs.deployed }}
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+      - name: Deploy to ${{ inputs.environment }}
+        id: run
+        env:
+          # Passed via env (not inline interpolation) so quoting in the
+          # caller-supplied command can't break the step script.
+          DEPLOY_COMMAND: ${{ inputs.deploy-command }}
+          ENVIRONMENT: ${{ inputs.environment }}
+        run: |
+          set -euo pipefail
+          echo "Deploying to ${ENVIRONMENT} (concurrency group: deploy-${ENVIRONMENT})"
+          bash -c "$DEPLOY_COMMAND"
+          echo "deployed=true" >> "$GITHUB_OUTPUT"

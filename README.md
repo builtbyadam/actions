@@ -34,6 +34,7 @@ A few flagship actions are also mirrored to standalone repositories and publishe
 | [downstream-canary](actions/downstream-canary) | Builds a downstream consumer against your latest main to catch breaking changes early. | Composite |
 | [runner-cost-reporter](actions/runner-cost-reporter) | Totals runner minutes per workflow and posts a weekly summary issue. | JS |
 | [reaction-triage](actions/reaction-triage) | Labels or closes issues when emoji reactions cross a threshold. | JS |
+| [concurrency-deploy-gate](.github/workflows/concurrency-deploy-gate.yml) | Serializes deploys per environment so they can never race. | Reusable workflow |
 
 ## Repository layout
 

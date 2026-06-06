@@ -1,0 +1,32 @@
+name: test-concurrency-deploy-gate
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/concurrency-deploy-gate.yml"
+      - ".github/workflows/test-concurrency-deploy-gate.yml"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/concurrency-deploy-gate.yml"
+
+jobs:
+  call-gate:
+    uses: ./.github/workflows/concurrency-deploy-gate.yml
+    with:
+      environment: ci-test
+      deploy-command: echo "fake deploy to ci-test completed"
+
+  assert:
+    needs: call-gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assert gate output
+        env:
+          DEPLOYED: ${{ needs.call-gate.outputs.deployed }}
+        run: |
+          node -e '
+            const assert = require("node:assert");
+            assert.strictEqual(process.env.DEPLOYED, "true");
+            console.log("OK: gate reported deployed=true");
+          '
