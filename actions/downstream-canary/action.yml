@@ -1,5 +1,5 @@
 name: "downstream-canary"
-description: "Clone a downstream consumer repo, build it against your latest checkout, and catch breaking changes before you release. Reverse-dependency / breaking-change detection in CI."
+description: "Build a downstream consumer repo against your latest checkout to catch breaking changes before you release."
 author: "amoussa1229"
 branding:
   icon: "git-branch"
