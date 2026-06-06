@@ -94,7 +94,7 @@ The `if:` guard on the consuming job matters: GitHub Actions fails a job whose m
 
 A rule is **active** when any changed file matches any of its globs. An entry is **kept** when any active rule selects it (string-compared key/value pairs; empty/omitted `select` matches everything). Entries are never duplicated. Pure matching logic is unit-tested independently of the GitHub API.
 
-The changed file list comes from `changed-files`, or is derived from the triggering event: `pulls.listFiles` for pull requests (paginated, so large PRs are fine), `compareCommits` between `before...after` for pushes.
+The changed file list comes from `changed-files`, or is derived from the triggering event: `pulls.listFiles` for pull requests (paginated, so large PRs are fine), `compareCommits` between `before...after` for pushes. Derivation needs `permissions: pull-requests: read` (PRs) or `contents: read` (pushes) on the calling job — without it the action logs a warning and applies `fallback`.
 
 ## Safety
 
