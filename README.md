@@ -50,6 +50,7 @@ Flagship actions are also mirrored to standalone repos and published on the **Gi
 | [**downstream-canary**](actions/downstream-canary) | Build a downstream consumer against your latest `main` to catch breaks early. | Composite | [↗](https://github.com/builtbyadam/downstream-canary) |
 | [**runner-cost-reporter**](actions/runner-cost-reporter) | Total runner minutes per workflow; post a weekly summary issue. | JS | [↗](https://github.com/builtbyadam/runner-cost-reporter) |
 | [**reaction-triage**](actions/reaction-triage) | Label or close issues when emoji reactions cross a threshold. | JS | [↗](https://github.com/builtbyadam/reaction-triage) |
+| [**auto-wiki-sync**](actions/auto-wiki-sync) | Mirror a docs folder to the repo's GitHub wiki, rewriting `.md` links. Additive by default. | Composite | [↗](https://github.com/builtbyadam/auto-wiki-sync) |
 | [**concurrency-deploy-gate**](.github/workflows/concurrency-deploy-gate.yml) | Serialize deploys per environment so they can never race. | Reusable workflow | — |
 
 > Mirrors and Marketplace listings roll out per action; a mirror link may 404 until that action is published. Every listed action ships in this repo with a green test workflow first.
