@@ -37,15 +37,15 @@ jobs:
         run: |
           set -euo pipefail
           git init --bare "$RUNNER_TEMP/wiki.git"
-          mkdir -p docs
-          printf '# Home\n\nSee [Page One](Page-One.md) and [ext](https://example.org).\n' > docs/Home.md
-          printf '# Page One\n\nBack to [Home](Home.md#top).\n' > docs/Page-One.md
+          mkdir -p wiki-src
+          printf '# Home\n\nSee [Page One](Page-One.md) and [ext](https://example.org).\n' > wiki-src/Home.md
+          printf '# Page One\n\nBack to [Home](Home.md#top).\n' > wiki-src/Page-One.md
 
       # Scenario 1: first sync writes both pages and rewrites links.
       - id: first
         uses: ./actions/auto-wiki-sync
         with:
-          docs-folder: docs
+          docs-folder: wiki-src
           repository: local/wiki-test
           wiki-remote: file://${{ runner.temp }}/wiki.git
 
@@ -74,7 +74,7 @@ jobs:
       - id: again
         uses: ./actions/auto-wiki-sync
         with:
-          docs-folder: docs
+          docs-folder: wiki-src
           repository: local/wiki-test
           wiki-remote: file://${{ runner.temp }}/wiki.git
 
@@ -90,11 +90,11 @@ jobs:
 
       # Scenario 3: dry-run reports a pending change but must NOT push it.
       - name: Add a page for the dry-run scenario
-        run: printf 'fresh\n' > docs/New.md
+        run: printf 'fresh\n' > wiki-src/New.md
       - id: dry
         uses: ./actions/auto-wiki-sync
         with:
-          docs-folder: docs
+          docs-folder: wiki-src
           repository: local/wiki-test
           wiki-remote: file://${{ runner.temp }}/wiki.git
           dry-run: "true"
