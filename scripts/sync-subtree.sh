@@ -16,6 +16,13 @@ set -euo pipefail
 # Keeping these transformations here (not baked into the monorepo READMEs)
 # means the monorepo never claims to be a mirror of itself and its links
 # always resolve.
+#
+# After pushing, it moves the mirror's floating MAJOR-version tag (e.g. v1) to
+# the new HEAD so `uses: builtbyadam/<name>@v1` (the form the README rewrite
+# above emits) always resolves to the latest synced content. Immutable vX.Y.Z
+# release tags stay hand-managed (those drive Marketplace releases); only the
+# floating major alias is automated here. The tag step runs on every invocation
+# so it self-heals even when there were no content changes to push.
 
 ACTION="$1"
 MIRROR="$2"          # e.g. builtbyadam/matrix-shrinker
@@ -68,9 +75,23 @@ PYEOF
 cd "$WORK"
 git add -A
 if git diff --cached --quiet; then
-  echo "No changes to sync for ${ACTION}."
-  exit 0
+  echo "No content changes to sync for ${ACTION}."
+else
+  git commit -m "sync: ${ACTION} from monorepo @ ${SRC_SHA}"
+  git push origin HEAD:main
+  echo "Synced ${ACTION} -> ${MIRROR}"
 fi
-git commit -m "sync: ${ACTION} from monorepo @ ${SRC_SHA}"
-git push origin HEAD:main
-echo "Synced ${ACTION} -> ${MIRROR}"
+
+# Keep the floating major-version alias (e.g. v1) pinned to the mirror's current
+# HEAD. Derive the major from the highest vN.* release tag (falls back to v1 for
+# a brand-new mirror with no releases yet) so this keeps working after a future
+# v2. Runs unconditionally so a previously-drifted tag self-heals on the next
+# sync. Force-update is required because moving a tag is a non-fast-forward.
+MAJOR="$(git tag -l 'v[0-9]*' | sed -E 's/^v([0-9]+).*/\1/' | sort -n | tail -1)"
+MAJOR="${MAJOR:-1}"
+git tag -f "v${MAJOR}" HEAD >/dev/null
+if git push -f origin "refs/tags/v${MAJOR}"; then
+  echo "Floating tag v${MAJOR} -> $(git rev-parse --short HEAD) in ${MIRROR}"
+else
+  echo "::warning::Could not update floating tag v${MAJOR} in ${MIRROR}; will retry on next sync."
+fi
