@@ -1,0 +1,178 @@
+name: "auto-wiki-sync"
+description: "Mirror a docs folder into the repository's GitHub wiki, rewriting relative .md links to extensionless wiki links."
+author: "amoussa1229"
+branding:
+  icon: "book-open"
+  color: "blue"
+
+inputs:
+  docs-folder:
+    description: "Path (relative to the workspace) of the folder to mirror into the wiki. Run actions/checkout first so it exists."
+    required: true
+  token:
+    description: >-
+      Token used to clone and push the wiki. Needs contents:write on the target
+      repo. For cross-repo syncs, supply a PAT with access to the target.
+    required: false
+    default: ${{ github.token }}
+  repository:
+    description: >-
+      Target repository (owner/name) whose wiki to sync. Defaults to the current
+      repository. Cross-repo syncs require a PAT in `token`.
+    required: false
+    default: ${{ github.repository }}
+  wiki-remote:
+    description: >-
+      Advanced: override the wiki git remote URL. When empty (default) the remote
+      is derived as https://x-access-token:<token>@github.com/<repository>.wiki.git.
+      Set this for GitHub Enterprise Server or to point at a local repo in tests.
+    required: false
+    default: ""
+  commit-message:
+    description: "Wiki commit message. The literal token {sha} is replaced with the short (7-char) commit SHA."
+    required: false
+    default: "docs: sync wiki ({sha})"
+  strip-md-extensions:
+    description: >-
+      When "true" (default), rewrite relative .md links to extensionless wiki
+      links (preserving #anchors, leaving external URLs alone).
+    required: false
+    default: "true"
+  clean:
+    description: >-
+      When "true", use rsync --delete so the wiki EXACTLY mirrors the source —
+      pages absent from docs-folder are DELETED (destructive). Defaults to
+      "false" (additive: only add/update pages, never delete).
+    required: false
+    default: "false"
+  dry-run:
+    description: >-
+      When "true", report what would change (and set outputs) WITHOUT committing
+      or pushing to the wiki. Defaults to "false".
+    required: false
+    default: "false"
+
+outputs:
+  changed:
+    description: '"true" if the wiki content changed (or, under dry-run, would change); otherwise "false".'
+    value: ${{ steps.sync.outputs.changed }}
+  files-synced:
+    description: "Number of files copied from docs-folder into the wiki working tree."
+    value: ${{ steps.sync.outputs.files-synced }}
+
+runs:
+  using: "composite"
+  steps:
+    - name: Sync docs folder to wiki
+      id: sync
+      shell: bash
+      env:
+        # Quote every input into an env var so untrusted values (e.g. commit
+        # messages) are never spliced into the script body. This prevents shell
+        # injection via crafted input.
+        INPUT_DOCS_FOLDER: ${{ inputs.docs-folder }}
+        INPUT_TOKEN: ${{ inputs.token }}
+        INPUT_REPOSITORY: ${{ inputs.repository }}
+        INPUT_WIKI_REMOTE: ${{ inputs.wiki-remote }}
+        INPUT_COMMIT_MESSAGE: ${{ inputs.commit-message }}
+        INPUT_STRIP_MD_EXTENSIONS: ${{ inputs.strip-md-extensions }}
+        INPUT_CLEAN: ${{ inputs.clean }}
+        INPUT_DRY_RUN: ${{ inputs.dry-run }}
+      run: |
+        set -euo pipefail
+
+        SRC="$INPUT_DOCS_FOLDER"
+
+        # Validate boolean inputs explicitly.
+        for pair in \
+          "strip-md-extensions:$INPUT_STRIP_MD_EXTENSIONS" \
+          "clean:$INPUT_CLEAN" \
+          "dry-run:$INPUT_DRY_RUN"; do
+          name="${pair%%:*}"; val="${pair#*:}"
+          case "$val" in
+            true|false) ;;
+            *) echo "Input \"$name\" must be \"true\" or \"false\" (got \"$val\")." >&2; exit 1 ;;
+          esac
+        done
+
+        if [ ! -d "$SRC" ]; then
+          echo "::error::docs-folder '$SRC' does not exist in the workspace. Did you run actions/checkout first?"
+          exit 1
+        fi
+        if [ -z "${INPUT_TOKEN}" ] && [ -z "${INPUT_WIKI_REMOTE}" ]; then
+          echo "::error::No token provided and wiki-remote is empty; cannot reach the wiki. Grant the job 'permissions: contents: write' (same-repo) or pass a PAT in 'token'."
+          exit 1
+        fi
+
+        # Resolve the short SHA and template it into the commit message.
+        SHORT_SHA="${GITHUB_SHA:0:7}"
+        COMMIT_MESSAGE="${INPUT_COMMIT_MESSAGE//\{sha\}/$SHORT_SHA}"
+
+        # Derive the wiki remote unless explicitly overridden.
+        if [ -n "$INPUT_WIKI_REMOTE" ]; then
+          WIKI_URL="$INPUT_WIKI_REMOTE"
+        else
+          WIKI_URL="https://x-access-token:${INPUT_TOKEN}@github.com/${INPUT_REPOSITORY}.wiki.git"
+        fi
+
+        # Clone into a temp dir (not the workspace) so repeated invocations and
+        # the user's own files never collide.
+        WIKI_DIR="$(mktemp -d)/wiki"
+
+        echo "::group::Clone wiki repo for ${INPUT_REPOSITORY}"
+        if ! git clone "$WIKI_URL" "$WIKI_DIR" 2>"$RUNNER_TEMP/clone-err.log"; then
+          echo "::error::Could not clone the wiki repository for ${INPUT_REPOSITORY}."
+          echo "::error::The wiki must be initialized ONCE via the web UI (create any page at"
+          echo "::error::https://github.com/${INPUT_REPOSITORY}/wiki) before this action can push to it."
+          echo "::error::An authenticated git push CANNOT create an uninitialized wiki — it returns 'Repository not found'."
+          echo "----- git clone stderr -----"
+          cat "$RUNNER_TEMP/clone-err.log"
+          exit 1
+        fi
+        echo "::endgroup::"
+
+        echo "::group::Rsync content into wiki working tree"
+        if [ "$INPUT_CLEAN" = "true" ]; then
+          rsync -av --delete --exclude '.git' "$SRC"/ "$WIKI_DIR"/
+        else
+          rsync -av --exclude '.git' "$SRC"/ "$WIKI_DIR"/
+        fi
+        echo "::endgroup::"
+
+        # Count the files copied from the source folder.
+        FILES_SYNCED="$(find "$SRC" -type f | wc -l | tr -d ' ')"
+
+        if [ "$INPUT_STRIP_MD_EXTENSIONS" = "true" ]; then
+          echo "::group::Rewrite relative .md links"
+          AUTO_WIKI_SYNC_DIR="$WIKI_DIR" node "$GITHUB_ACTION_PATH/src/rewrite-links.js"
+          echo "::endgroup::"
+        else
+          echo "Skipping .md link rewrite (strip-md-extensions=false)."
+        fi
+
+        echo "::group::Commit and push if changed"
+        cd "$WIKI_DIR"
+        git config user.name  "github-actions[bot]"
+        git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git add -A
+        if git diff --cached --quiet; then
+          CHANGED="false"
+          echo "No changes to sync — wiki already up to date."
+        else
+          CHANGED="true"
+          if [ "$INPUT_DRY_RUN" = "true" ]; then
+            echo "dry-run: wiki would be updated. Pending changes:"
+            git status --short
+          else
+            git commit -m "$COMMIT_MESSAGE"
+            git push origin HEAD
+            echo "Wiki updated."
+          fi
+        fi
+        echo "::endgroup::"
+
+        echo "Files synced: ${FILES_SYNCED}; changed: ${CHANGED}; dry-run: ${INPUT_DRY_RUN}"
+        {
+          echo "changed=${CHANGED}"
+          echo "files-synced=${FILES_SYNCED}"
+        } >> "$GITHUB_OUTPUT"

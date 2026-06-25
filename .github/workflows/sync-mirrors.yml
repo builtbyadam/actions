@@ -24,6 +24,7 @@ env:
     downstream-canary:builtbyadam/downstream-canary
     runner-cost-reporter:builtbyadam/runner-cost-reporter
     reaction-triage:builtbyadam/reaction-triage
+    auto-wiki-sync:builtbyadam/auto-wiki-sync
 
 jobs:
   sync:

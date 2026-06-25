@@ -1,0 +1,115 @@
+name: test-auto-wiki-sync
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "actions/auto-wiki-sync/**"
+      - ".github/workflows/test-auto-wiki-sync.yml"
+  push:
+    branches: [main]
+    paths:
+      - "actions/auto-wiki-sync/**"
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24"
+      - working-directory: actions/auto-wiki-sync
+        run: node --test
+
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # A local bare repo stands in for the GitHub wiki, so the test is fully
+      # hermetic and deterministic on both push and pull_request — no live wiki,
+      # no secrets. The action reaches it via the wiki-remote override.
+      - name: Seed a local "wiki" remote and a docs folder
+        run: |
+          set -euo pipefail
+          git init --bare "$RUNNER_TEMP/wiki.git"
+          mkdir -p wiki-src
+          printf '# Home\n\nSee [Page One](Page-One.md) and [ext](https://example.org).\n' > wiki-src/Home.md
+          printf '# Page One\n\nBack to [Home](Home.md#top).\n' > wiki-src/Page-One.md
+
+      # Scenario 1: first sync writes both pages and rewrites links.
+      - id: first
+        uses: ./actions/auto-wiki-sync
+        with:
+          docs-folder: wiki-src
+          repository: local/wiki-test
+          wiki-remote: file://${{ runner.temp }}/wiki.git
+
+      - name: Assert first sync changed the wiki
+        env:
+          CHANGED: ${{ steps.first.outputs.changed }}
+          FILES: ${{ steps.first.outputs.files-synced }}
+        run: |
+          node -e '
+            const assert = require("node:assert");
+            assert.strictEqual(process.env.CHANGED, "true", "expected changed=true, got " + process.env.CHANGED);
+            assert.strictEqual(process.env.FILES, "2", "expected files-synced=2, got " + process.env.FILES);
+            console.log("OK: first sync -> changed=true, files-synced=2");
+          '
+
+      - name: Assert pushed content has rewritten links
+        run: |
+          set -euo pipefail
+          git clone -q "file://$RUNNER_TEMP/wiki.git" verify
+          grep -qF '[Page One](Page-One)' verify/Home.md
+          grep -qF '[ext](https://example.org)' verify/Home.md
+          grep -qF '[Home](Home#top)' verify/Page-One.md
+          echo "OK: .md links stripped, anchors preserved, external URLs intact"
+
+      # Scenario 2: re-running with no source change is a no-op.
+      - id: again
+        uses: ./actions/auto-wiki-sync
+        with:
+          docs-folder: wiki-src
+          repository: local/wiki-test
+          wiki-remote: file://${{ runner.temp }}/wiki.git
+
+      - name: Assert second sync is idempotent
+        env:
+          CHANGED: ${{ steps.again.outputs.changed }}
+        run: |
+          node -e '
+            const assert = require("node:assert");
+            assert.strictEqual(process.env.CHANGED, "false", "expected changed=false, got " + process.env.CHANGED);
+            console.log("OK: idempotent re-run -> changed=false");
+          '
+
+      # Scenario 3: dry-run reports a pending change but must NOT push it.
+      - name: Add a page for the dry-run scenario
+        run: printf 'fresh\n' > wiki-src/New.md
+      - id: dry
+        uses: ./actions/auto-wiki-sync
+        with:
+          docs-folder: wiki-src
+          repository: local/wiki-test
+          wiki-remote: file://${{ runner.temp }}/wiki.git
+          dry-run: "true"
+      - name: Assert dry-run reported change but pushed nothing
+        env:
+          CHANGED: ${{ steps.dry.outputs.changed }}
+          FILES: ${{ steps.dry.outputs.files-synced }}
+        run: |
+          set -euo pipefail
+          node -e '
+            const assert = require("node:assert");
+            assert.strictEqual(process.env.CHANGED, "true", "expected changed=true under dry-run");
+            assert.strictEqual(process.env.FILES, "3", "expected files-synced=3, got " + process.env.FILES);
+          '
+          rm -rf verify2
+          git clone -q "file://$RUNNER_TEMP/wiki.git" verify2
+          test ! -f verify2/New.md
+          echo "OK: dry-run -> changed=true, files-synced=3, New.md NOT pushed"
